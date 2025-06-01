@@ -14,13 +14,14 @@ const App = () => {
   const [showImportExport, setShowImportExport] = useState(false);
   const [importData, setImportData] = useState('');
 
-  const categories = ['ONGOING', 'CLIENT WORK', 'URGENT', 'HIGH PRIORITY', 'MEDIUM PRIORITY'];
+  const categories = ['ONGOING', 'WEEKLY ONGOING', 'CLIENT WORK', 'URGENT', 'HIGH PRIORITY', 'MEDIUM PRIORITY'];
   
   const categoryColors = {
     'URGENT': 'bg-red-100 border-red-300 text-red-800',
     'HIGH PRIORITY': 'bg-orange-100 border-orange-300 text-orange-800',
     'MEDIUM PRIORITY': 'bg-yellow-100 border-yellow-300 text-yellow-800',
     'ONGOING': 'bg-blue-100 border-blue-300 text-blue-800',
+    'WEEKLY ONGOING': 'bg-purple-100 border-purple-300 text-purple-800',
     'CLIENT WORK': 'bg-green-100 border-green-300 text-green-800'
   };
 
@@ -39,6 +40,13 @@ const App = () => {
   const getDateKey = () => {
     const today = new Date();
     return today.toISOString().split('T')[0];
+  };
+
+  const getWeekKey = () => {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay()); // Start from Sunday
+    return startOfWeek.toISOString().split('T')[0];
   };
 
   // Handle authentication
@@ -66,7 +74,7 @@ const App = () => {
         tasksData.push({ id: doc.id, ...doc.data() });
       });
       
-      // Reset ongoing tasks if it's a new day
+      // Reset daily ongoing tasks if it's a new day
       const savedDate = localStorage.getItem('lastVisitDate');
       const currentDate = getDateKey();
       
@@ -74,6 +82,19 @@ const App = () => {
         localStorage.setItem('lastVisitDate', currentDate);
         tasksData.forEach(task => {
           if (task.category === 'ONGOING') {
+            updateTaskInFirebase(task.id, { ...task, completed: false });
+          }
+        });
+      }
+      
+      // Reset weekly ongoing tasks if it's a new week
+      const savedWeek = localStorage.getItem('lastVisitWeek');
+      const currentWeek = getWeekKey();
+      
+      if (savedWeek !== currentWeek) {
+        localStorage.setItem('lastVisitWeek', currentWeek);
+        tasksData.forEach(task => {
+          if (task.category === 'WEEKLY ONGOING') {
             updateTaskInFirebase(task.id, { ...task, completed: false });
           }
         });
@@ -117,14 +138,12 @@ const App = () => {
     
     if (direction === 'up' && taskIndexInCategory > 0) {
       const targetTask = categoryTasks[taskIndexInCategory - 1];
-      const targetIndex = tasks.findIndex(t => t.id === targetTask.id);
       
       // Swap order values
       await updateTaskInFirebase(task.id, { ...task, order: targetTask.order });
       await updateTaskInFirebase(targetTask.id, { ...targetTask, order: task.order });
     } else if (direction === 'down' && taskIndexInCategory < categoryTasks.length - 1) {
       const targetTask = categoryTasks[taskIndexInCategory + 1];
-      const targetIndex = tasks.findIndex(t => t.id === targetTask.id);
       
       // Swap order values
       await updateTaskInFirebase(task.id, { ...task, order: targetTask.order });
@@ -346,7 +365,9 @@ const App = () => {
       {categories.map(category => (
         <div key={category} className="mb-8">
           <h2 className={`text-xl font-bold mb-4 px-3 py-2 rounded-lg ${categoryColors[category]}`}>
-            {category} {category === 'ONGOING' && <span className="text-sm font-normal">(resets daily)</span>}
+            {category} 
+            {category === 'ONGOING' && <span className="text-sm font-normal">(resets daily)</span>}
+            {category === 'WEEKLY ONGOING' && <span className="text-sm font-normal">(resets weekly - Sunday)</span>}
           </h2>
           <div className="space-y-2">
             {groupedTasks[category].map(task => (
@@ -380,7 +401,8 @@ const App = () => {
                   >
                     {categories.map(category => (
                       <option key={category} value={category}>
-                        {category === 'ONGOING' ? 'ONGOING' : 
+                        {category === 'ONGOING' ? 'DAILY' : 
+                         category === 'WEEKLY ONGOING' ? 'WEEKLY' :
                          category === 'CLIENT WORK' ? 'CLIENT' :
                          category === 'HIGH PRIORITY' ? 'HIGH' :
                          category === 'MEDIUM PRIORITY' ? 'MEDIUM' :
